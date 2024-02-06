@@ -1,27 +1,31 @@
-# Copyright 2024 Flower Labs GmbH. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+from sqlmodel import select, exists
 
-from api.main import read_root
+from api import models
 
 
-def test_read_root():
-    # Prepare
-    expected = {"Hello": "World"}
+def test_create_user(client, db_session):
+    response = client.post("/users", json={"email": "test@test.com", "password": "12345"})
+    assert response.status_code == 201
 
-    # Execute
-    actual = read_root()
+    user = response.json()
+    assert user == {"email": "test@test.com", "id": 1}
 
-    # Assert
-    assert expected == actual
+    with db_session() as session:
+        assert session.exec(select(models.User).where(models.User.id == user["id"])).first() is not None
+
+
+def test_get_user(client, db_session):
+    with db_session() as session:
+        
+        test_user = models.User(email="test@test.com", hashed_password="12345")
+        session.add(test_user)
+        session.commit()
+
+        response = client.get(f"/users/{test_user.id}")
+        assert response.status_code == 200
+
+        session.refresh(test_user)
+
+        expected_user = {"email": "test@test.com", "id": test_user.id}
+
+        assert response.json() == expected_user
